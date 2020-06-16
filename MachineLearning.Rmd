@@ -1,0 +1,92 @@
+---
+title: "Machine Learning Coursera Project"
+author: "Molly"
+date: "5/21/2020"
+output: html_document
+---
+
+```{r echo=FALSE, include=FALSE}
+library(ggplot2)
+library(caret)
+library(rpart)
+library(randomForest)
+library(rattle)
+library(rpart.plot)
+#opts_chunk$set(tidy.opts=list(width.cutoff=80),tidy=TRUE)
+```
+
+## Summary:
+For this project, I have used data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to use machine learning to predict how well a type of exercise has been performed. 
+
+## Data:
+The **training** data for this project are available here: [training data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv)
+
+The **test** data are available here: [testing data](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)
+
+## Data processing/Model Building/Expected out-of-sample error:
+From the original dataset, I removed columns with 0s, "NAs", and those corresponding to irrelevant data such as participant IDs and timestamps. Next, I partitioned that training data such that 70% was used for training and 30% was used for testing. The 30% testing data was used for **crossvalidation**. For my model, I compared a decision tree (DT) and a random forest model (RF) as these models work well for categorical data unlike linear regression models. The "classe" variable was used for the outcome and all remaining variables following processing were used as predictors. Once the models were generated and predictions were run on the partitioned testing set, I used a Confusion Matrix to determine the accuracy of either model (DF=75% accurate, RF=99.5% accurate). Since the RF model was much more accurate, I applied that model for the predictions for the final test to be used for the "Course Project Prediction Quiz". **Expected out-of-sample error** for our model will be very low due to the high accuracy of the RF model on the testing dataset (>99%) see details below for calculations. 
+
+```{r}
+if(!file.exists("./data"))
+{
+  dir.create("./data")
+}
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl,destfile="./data/Train.csv")
+training <- read.csv(file = "data/Train.csv")
+
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl2,destfile="./data/Test.csv")
+testing <- read.csv(file = "data/Test.csv")
+
+```
+
+```{r}
+#pre-processing training dataset to remove irrelavent predictors. We keep data related to acceleration as per the assignment instructions. 
+training1 <- training[ , -c(1:7)] #remove first 7 columns 
+training1[training1==""] <- NA
+training1 <- training1[,colSums(is.na(training1))==0] #removes columns with NAs
+
+#repeat pre-processing for testing dataset:
+pattern <- names(training1)
+testing1 <- testing[,grepl(paste0("^", pattern, "$", collapse="|"),colnames(testing))]
+
+set.seed(1235) #Reproducible random numbers
+
+#Create training (70%) and test (30%) set from the training set. 
+inTrain <- createDataPartition(y=training1$classe, p=0.7, list=FALSE)
+train1 <- training1[inTrain,]
+test1 <- training1[-inTrain,]
+dim(train1);dim(test1)
+
+
+#Decision Tree Model
+modDT <- rpart(classe~., data=train1, method="class")
+fancyRpartPlot(modDT)
+predictDT <- predict(modDT, test1, type="class")
+confusionMatrix(table(predictDT, test1$classe))
+
+
+#Random Forest Model
+train1$classe = factor(train1$classe) 
+modRF <- randomForest(classe~., data=train1)
+predictRF <- predict(modRF, test1, type="class")
+confusionMatrix(table(predictRF, test1$classe))
+```
+
+### Since the RF model was much more accurate, I applied that model for the predictions for the final test to be used for the "Course Project Prediction Quiz".
+
+```{r}
+#Run the Random Forest model on the final test data for the Course Project Prediction Quiz. 
+FinalPredict <- predict(modRF, testing1, type="class")
+print(FinalPredict) #Use these answers for the quiz. 
+```
+
+### Out-of-sample error calculation
+Since we determined accuracy to be 0.9954 from our cross-validation, the error should be equal to 1-0.9954. 
+```{r}
+OOSEr <- (1-0.9954)*100
+print(OOSEr) #The out-of-sample error is .46%
+```
+
+
